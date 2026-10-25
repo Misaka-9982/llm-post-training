@@ -22,13 +22,14 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-如果 uv 尚未加入 PATH，当前机器可使用已有安装：
+uv 独立安装在用户目录 `~/.local/bin/uv`。当前终端可执行：
 
 ```bash
-export PATH="$HOME/miniconda3/envs/cs336/bin:$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 ```
 
-这里只复用 uv 和 Python 可执行文件，项目依赖安装在本目录 `.venv`。
+Python 由 uv 独立管理，项目通过 `uv.toml` 仅选择 uv 管理的 Python，依赖安装在本目录 `.venv`，与 Conda 环境解耦。
+新机器首次设置时先运行 `uv python install 3.12`，再运行 `uv sync --locked`。
 初始环境只包含开发工具；PyTorch、Transformers、Datasets、TRL、Accelerate 和 W&B
 将在对应阶段按实际 GPU 环境添加和锁定。
 
