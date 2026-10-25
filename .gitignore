@@ -1,0 +1,33 @@
+# Python and development
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.vscode/
+.idea/
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.netrc
+# Data, model artifacts and logs
+/data/
+/models/
+/checkpoints/
+/outputs/
+/runs/
+/logs/
+/cache/
+/.cache/
+wandb/
+*.log
+*.pt
+*.pth
+*.safetensors
