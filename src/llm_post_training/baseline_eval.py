@@ -1,9 +1,13 @@
-import torch
+import argparse
+import json
 import re
+from pathlib import Path
+
+import torch
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from llm_post_training.data import load_gsm8k, extract_final_answer
-
+from llm_post_training.data import extract_final_answer, load_gsm8k
 
 MODEL_NAME = "Qwen/Qwen3-0.6B-Base"
 
@@ -55,33 +59,54 @@ def extract_model_answer(response: str) -> str | None:
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Evaluate the baseline model on GSM8K.")
+    parser.add_argument(
+        "--num_samples", type=int, default=1,
+        help="Number of test samples to evaluate (default: 1).",
+    )
+    parser.add_argument(
+        "--output", type=Path, default=Path("outputs/baseline_eval.jsonl"),
+        help="Output JSONL path.",
+    )
+    args = parser.parse_args()
+    if args.num_samples <= 0:
+        parser.error("--num_samples must be greater than 0")
+
     dataset = load_gsm8k()
-    tokenizer, model = load_model() 
+    samples = dataset["test"]
+    num_samples = min(args.num_samples, len(samples))
+    tokenizer, model = load_model()
 
-    # 加载测试数据集
-    sample = dataset["test"][0]
+    correct = total = parse_fail = 0
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with args.output.open("w", encoding="utf-8") as output_file:
+        for index in tqdm(range(num_samples), desc="Evaluating", unit="sample"):
+            sample = samples[index]
+            question = sample["question"]
+            gold_answer = extract_final_answer(sample["answer"])
+            response = generate_answer(model=model, tokenizer=tokenizer, question=question)
+            pred_answer = extract_model_answer(response)
+            is_correct = pred_answer is not None and pred_answer == gold_answer
 
-    question = sample["question"]
-    gold_answer = extract_final_answer(sample["answer"])
+            total += 1
+            correct += int(is_correct)
+            parse_fail += int(pred_answer is None)
+            result = {
+                "question": question,
+                "gold_answer": gold_answer,
+                "model_response": response,
+                "pred_answer": pred_answer,
+                "correct": is_correct,
+            }
+            output_file.write(json.dumps(result, ensure_ascii=False) + "\n")
+            output_file.flush()
 
-    response = generate_answer(model=model, tokenizer=tokenizer, question=question)
-
-    print("Question:")
-    print(question)
-
-    print("\nGold answer:")
-    print(gold_answer)
-
-    print("\nModel response:")
-    print(response)
-
-    pred_answer = extract_model_answer(response)
-
-    print("\nPredicted answer:")
-    print(pred_answer)
-
-    print("\nCorrect:")
-    print(pred_answer == gold_answer)
+    accuracy = correct / total if total else 0.0
+    print(
+        f"correct: {correct} / total: {total} / "
+        f"parse_fail: {parse_fail} / accuracy: {accuracy:.4f}"
+    )
+    print(f"Results saved to: {args.output}")
 
 
 if __name__ == "__main__":
