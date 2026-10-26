@@ -25,7 +25,7 @@ def bulid_prompt(question: str) -> str:
 
 
 @torch.no_grad()
-def generate_answer(model, tokenizer, question: str, max_new_tokens: int = 256) -> str:
+def generate_answer(model, tokenizer, question: str, max_new_tokens: int = 512) -> str:
     prompt = bulid_prompt(question)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
@@ -40,9 +40,27 @@ def generate_answer(model, tokenizer, question: str, max_new_tokens: int = 256) 
 
 
 def main():
-    pass
+    dataset = load_gsm8k()
+    tokenizer, model = load_model() 
+
+    # 加载测试数据集
+    sample = dataset["test"][0]
+
+    question = sample["question"]
+    gold_answer = extract_final_answer(sample["answer"])
+
+    response = generate_answer(model=model, tokenizer=tokenizer, question=question)
+
+    print("Question:")
+    print(question)
+
+    print("\nGold answer:")
+    print(gold_answer)
+
+    print("\nModel response:")
+    print(response)
 
 
 if __name__ == "__main__":
-    pass
+    main()
 
