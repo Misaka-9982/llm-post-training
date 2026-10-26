@@ -7,7 +7,13 @@ authors = [
     { name = "Misaka-9982", email = "77013576+Misaka-9982@users.noreply.github.com" }
 ]
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "accelerate>=1.15.0",
+    "datasets>=5.1.0",
+    "torch>=2.14.1",
+    "tqdm>=4.70.1",
+    "transformers>=5.20.2",
+]
 
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12.0"]
