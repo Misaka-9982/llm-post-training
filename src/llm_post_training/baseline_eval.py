@@ -1,4 +1,5 @@
 import torch
+import re
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from llm_post_training.data import load_gsm8k, extract_final_answer
@@ -29,7 +30,7 @@ def generate_answer(model, tokenizer, question: str, max_new_tokens: int = 512) 
     prompt = bulid_prompt(question)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
-    # **字典解包传参
+    # **字典解包传参  do_sample=False贪心解码
     outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
 
     # 只留生成的，去除输入prompt
@@ -37,6 +38,20 @@ def generate_answer(model, tokenizer, question: str, max_new_tokens: int = 512) 
     response = tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
     return response
+
+
+def extract_model_answer(response: str) -> str | None:
+    # 优先匹配要求的 GSM8K 格式：#### 18
+    match = re.search(r"####\s*(-?[\d,]+(?:\.\d+)?)", response)
+    if match:
+        return match.group(1).replace(",", "")
+
+    # 匹配 LaTeX boxed：\boxed{18}
+    matches = re.findall(r"\\boxed\{(-?[\d,]+(?:\.\d+)?)\}", response)
+    if matches:
+        return matches[-1].replace(",", "")
+
+    return None
 
 
 def main():
@@ -59,6 +74,14 @@ def main():
 
     print("\nModel response:")
     print(response)
+
+    pred_answer = extract_model_answer(response)
+
+    print("\nPredicted answer:")
+    print(pred_answer)
+
+    print("\nCorrect:")
+    print(pred_answer == gold_answer)
 
 
 if __name__ == "__main__":
