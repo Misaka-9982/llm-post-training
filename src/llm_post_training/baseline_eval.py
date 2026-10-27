@@ -13,6 +13,9 @@ MODEL_NAME = "Qwen/Qwen3-0.6B-Base"
 
 def load_model():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    tokenizer.padding_side = "left"
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
     
     model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=torch.bfloat16, device_map="auto")
 
@@ -30,18 +33,22 @@ def bulid_prompt(question: str) -> str:
 
 
 @torch.no_grad()
-def generate_answer(model, tokenizer, question: str, max_new_tokens: int = 512) -> str:
-    prompt = bulid_prompt(question)
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+def generate_answers(model, tokenizer, questions: list[str], max_new_tokens: int = 512) -> list[str]:
+    prompts = [bulid_prompt(question) for question in questions]
+    inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(model.device)
 
     # **字典解包传参  do_sample=False贪心解码
     outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, do_sample=False)
 
-    # 只留生成的，去除输入prompt
-    generated_tokens = outputs[0, inputs["input_ids"].shape[1]:]
-    response = tokenizer.decode(generated_tokens, skip_special_tokens=True)
+    # 只留生成的，去除输入prompt（包含左侧padding）
+    generated_tokens = outputs[:, inputs["input_ids"].shape[1]:]
+    responses = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)
 
-    return response
+    return responses
+
+
+def generate_answer(model, tokenizer, question: str, max_new_tokens: int = 512) -> str:
+    return generate_answers(model, tokenizer, [question], max_new_tokens=max_new_tokens)[0]
 
 
 def extract_model_answer(response: str) -> str | None:
@@ -65,12 +72,18 @@ def main():
         help="Number of test samples to evaluate (default: 1).",
     )
     parser.add_argument(
+        "--batch_size", type=int, default=1,
+        help="Number of samples per inference batch (default: 1).",
+    )
+    parser.add_argument(
         "--output", type=Path, default=Path("outputs/baseline_eval.jsonl"),
         help="Output JSONL path.",
     )
     args = parser.parse_args()
     if args.num_samples <= 0:
         parser.error("--num_samples must be greater than 0")
+    if args.batch_size <= 0:
+        parser.error("--batch_size must be greater than 0")
 
     dataset = load_gsm8k()
     samples = dataset["test"]
@@ -79,27 +92,34 @@ def main():
 
     correct = total = parse_fail = 0
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("w", encoding="utf-8") as output_file:
-        for index in tqdm(range(num_samples), desc="Evaluating", unit="sample"):
-            sample = samples[index]
-            question = sample["question"]
-            gold_answer = extract_final_answer(sample["answer"])
-            response = generate_answer(model=model, tokenizer=tokenizer, question=question)
-            pred_answer = extract_model_answer(response)
-            is_correct = pred_answer is not None and pred_answer == gold_answer
+    with args.output.open("w", encoding="utf-8") as output_file, tqdm(
+        total=num_samples, desc="Evaluating", unit="sample",
+    ) as progress:
+        for start in range(0, num_samples, args.batch_size):
+            batch = [samples[index] for index in range(start, min(start + args.batch_size, num_samples))]
+            responses = generate_answers(
+                model=model, tokenizer=tokenizer,
+                questions=[sample["question"] for sample in batch],
+            )
+            for sample, response in zip(batch, responses, strict=True):
+                question = sample["question"]
+                gold_answer = extract_final_answer(sample["answer"])
+                pred_answer = extract_model_answer(response)
+                is_correct = pred_answer is not None and pred_answer == gold_answer
 
-            total += 1
-            correct += int(is_correct)
-            parse_fail += int(pred_answer is None)
-            result = {
-                "question": question,
-                "gold_answer": gold_answer,
-                "model_response": response,
-                "pred_answer": pred_answer,
-                "correct": is_correct,
-            }
-            output_file.write(json.dumps(result, ensure_ascii=False) + "\n")
+                total += 1
+                correct += int(is_correct)
+                parse_fail += int(pred_answer is None)
+                result = {
+                    "question": question,
+                    "gold_answer": gold_answer,
+                    "model_response": response,
+                    "pred_answer": pred_answer,
+                    "correct": is_correct,
+                }
+                output_file.write(json.dumps(result, ensure_ascii=False) + "\n")
             output_file.flush()
+            progress.update(len(batch))
 
     accuracy = correct / total if total else 0.0
     print(
