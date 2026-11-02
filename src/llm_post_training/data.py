@@ -130,11 +130,11 @@ if __name__ == "__main__":
         enable_thinking=False,
     )
 
-    print('qwen官方的chat template效果：\n'+formatted_text)
+    print('qwen官方的chat template效果: \n'+formatted_text)
 
-    print('自定义的chat template应用函数：\n'+format_sft_example(processed_dataset[0]))
+    print('自定义的chat template应用函数: \n'+format_sft_example(processed_dataset[0]))
 
-    print('Tokenization+mask测试：\n')
+    print('Tokenization+mask测试: \n')
     
     example = processed_dataset[0]
     tokenized = tokenize_sft_example(example, tokenizer)
@@ -156,4 +156,29 @@ if __name__ == "__main__":
         tokenizer.decode(tokenized["input_ids"][first_label_idx:])
     )
 
+    print('padding测试: ')
+    from transformers import DataCollatorForSeq2Seq
+
+    tokenized_train = processed_dataset.map(
+    lambda example: tokenize_sft_example(example, tokenizer),
+    remove_columns=processed_dataset.column_names,
+    )
+
+    data_collator = DataCollatorForSeq2Seq(
+        tokenizer=tokenizer,
+        padding=True,
+        label_pad_token_id=-100,
+        return_tensors="pt",
+    )
+
+    batch = data_collator(
+        [tokenized_train[i] for i in range(3)]
+    )
+
+    print(batch["input_ids"].shape)
+    print(batch["attention_mask"].shape)
+    print(batch["labels"].shape)
     
+    print(batch["input_ids"][0])
+    print(batch["attention_mask"][0])
+    print(batch["labels"][0])
