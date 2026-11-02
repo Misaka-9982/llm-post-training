@@ -59,6 +59,39 @@ def format_sft_example(preprocessed_example):
     )
 
 
+def tokenize_sft_example(example, tokenizer):
+    text = format_sft_example(example)
+
+    # 只到 assistant 内容开始之前
+    prompt_text = (
+        "<|im_start|>user\n"
+        f"{example['messages'][0]['content']}<|im_end|>\n"
+        "<|im_start|>assistant\n"
+    )
+
+    full = tokenizer(
+        text,
+        add_special_tokens=False,
+    )
+
+    prompt = tokenizer(
+        prompt_text,
+        add_special_tokens=False,
+    )
+
+    input_ids = full["input_ids"]
+    labels = input_ids.copy()
+
+    prompt_len = len(prompt["input_ids"])
+    labels[:prompt_len] = [-100] * prompt_len
+
+    return {
+        "input_ids": input_ids,
+        "attention_mask": full["attention_mask"],
+        "labels": labels,
+    }
+
+
 if __name__ == "__main__":
     dataset = load_gsm8k()
 
@@ -100,4 +133,27 @@ if __name__ == "__main__":
     print('qwen官方的chat template效果：\n'+formatted_text)
 
     print('自定义的chat template应用函数：\n'+format_sft_example(processed_dataset[0]))
+
+    print('Tokenization+mask测试：\n')
+    
+    example = processed_dataset[0]
+    tokenized = tokenize_sft_example(example, tokenizer)
+
+    print("input length:", len(tokenized["input_ids"]))
+    print("labels length:", len(tokenized["labels"]))
+
+    print(tokenizer.decode(tokenized["input_ids"]))
+
+    first_label_idx = next(
+        i for i, x in enumerate(tokenized["labels"])
+        if x != -100
+    )
+
+    print("first supervised token index:", first_label_idx)
+
+    print(
+        "supervised text:",
+        tokenizer.decode(tokenized["input_ids"][first_label_idx:])
+    )
+
     
