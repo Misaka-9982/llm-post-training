@@ -1,5 +1,8 @@
 from datasets import load_dataset
 from transformers import AutoTokenizer, DataCollatorForSeq2Seq
+import torch
+from transformers import AutoModelForCausalLM, TrainingArguments, Trainer
+
 
 from llm_post_training.data import preprocess_example, tokenize_sft_example
 
@@ -27,11 +30,47 @@ def main():
         return_tensors="pt",
     )
 
-    # 1. load model
-    # 2. 配 LoRA / full fine-tuning
-    # 3. TrainingArguments / SFTConfig
-    # 4. SFTTrainer
-    # 5. trainer.train()
+    model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=torch.bfloat16)
+    model.config.use_cache = False  # 禁用kvcache
+
+    training_args = TrainingArguments(
+        output_dir="outputs/qwen3-0.6b-gsm8k-sft",
+
+        num_train_epochs=2,
+
+        per_device_train_batch_size=4,
+        gradient_accumulation_steps=4,
+
+        learning_rate=2e-5,
+        weight_decay=0.01,
+
+        bf16=True,
+
+        logging_steps=10,
+        save_steps=200,
+        save_total_limit=2,
+
+        report_to="none",
+
+        remove_unused_columns=False,
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=tokenized_train,
+        data_collator=data_collator,
+    )
+
+    trainer.train()
+
+    trainer.save_model(
+        "outputs/qwen3-0.6b-gsm8k-sft/final"
+    )
+    tokenizer.save_pretrained(
+        "outputs/qwen3-0.6b-gsm8k-sft/final"
+    )
+
 
 if __name__ == "__main__":
     main()
