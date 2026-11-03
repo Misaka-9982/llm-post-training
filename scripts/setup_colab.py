@@ -84,22 +84,28 @@ def create_archive(project_root: Path, archive_path: Path):
     file_count = 0
 
     with tarfile.open(archive_path, "w:gz") as tar:
-        for path in project_root.rglob("*"):
-            if should_exclude(path, project_root):
-                continue
+        for directory, dirnames, filenames in os.walk(project_root):
+            directory = Path(directory)
+            # 直接跳过 outputs 等排除目录，不遍历其中的权重和检查点。
+            dirnames[:] = [
+                name for name in dirnames
+                if not should_exclude(directory / name, project_root)
+            ]
 
-            if not path.is_file():
-                continue
+            for filename in filenames:
+                path = directory / filename
+                if should_exclude(path, project_root) or not path.is_file():
+                    continue
 
-            relative = path.relative_to(project_root)
+                relative = path.relative_to(project_root)
 
-            tar.add(
-                path,
-                arcname=relative,
-                recursive=False,
-            )
+                tar.add(
+                    path,
+                    arcname=relative,
+                    recursive=False,
+                )
 
-            file_count += 1
+                file_count += 1
 
     size_mb = archive_path.stat().st_size / 1024 / 1024
 
