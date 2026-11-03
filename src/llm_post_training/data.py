@@ -44,51 +44,39 @@ def preprocess_example(example: dict) -> dict:
     }
 
 
-# 把预处理后的样本处理成sft chat template的格式
-def format_sft_example(preprocessed_example):
-    messages = preprocessed_example["messages"]
-
-    user_content = messages[0]["content"]
-    assistant_content = messages[1]["content"]
-
+def build_prompt(question: str) -> str:
     return (
-        "<|im_start|>user\n"
-        f"{user_content}<|im_end|>\n"
-        "<|im_start|>assistant\n"
-        f"{assistant_content}<|im_end|>\n"
+        f"Question: {question}\n"
+        "Solve the problem step by step. "
+        "Give the final answer after ####.\n"
+        "Answer:"
     )
+
+
+def format_sft_example(preprocessed_example, eos_token: str = "<|endoftext|>"):
+    messages = preprocessed_example["messages"]
+    return build_prompt(messages[0]["content"]) + messages[1]["content"] + eos_token
 
 
 def tokenize_sft_example(example, tokenizer):
-    text = format_sft_example(example)
-
-    # 只到 assistant 内容开始之前
-    prompt_text = (
-        "<|im_start|>user\n"
-        f"{example['messages'][0]['content']}<|im_end|>\n"
-        "<|im_start|>assistant\n"
-    )
-
-    full = tokenizer(
-        text,
+    # Separately encode the inference prefix so its token boundary is exact.
+    prompt_ids = tokenizer(
+        build_prompt(example["messages"][0]["content"]),
         add_special_tokens=False,
-    )
-
-    prompt = tokenizer(
-        prompt_text,
+    )["input_ids"]
+    response_ids = tokenizer(
+        example["messages"][1]["content"],
         add_special_tokens=False,
-    )
-
-    input_ids = full["input_ids"]
-    labels = input_ids.copy()
-
-    prompt_len = len(prompt["input_ids"])
-    labels[:prompt_len] = [-100] * prompt_len
+    )["input_ids"]
+    if tokenizer.eos_token_id is None:
+        raise ValueError("SFT requires tokenizer.eos_token_id")
+    response_ids = response_ids + [tokenizer.eos_token_id]
+    input_ids = prompt_ids + response_ids
 
     return {
         "input_ids": input_ids,
-        "attention_mask": full["attention_mask"],
-        "labels": labels,
+        "attention_mask": [1] * len(input_ids),
+        "labels": [-100] * len(prompt_ids) + response_ids,
     }
 
 
@@ -182,3 +170,19 @@ if __name__ == "__main__":
     print(batch["input_ids"][0])
     print(batch["attention_mask"][0])
     print(batch["labels"][0])
+
+    print('\nEOS检查')
+    example = tokenized_train[0]
+
+    print(tokenizer.decode(example["input_ids"]))
+    print(example["input_ids"][-10:])
+    print("eos_token:", tokenizer.eos_token)
+    print("eos_token_id:", tokenizer.eos_token_id)
+    print("last token:", example["input_ids"][-1])
+
+    print('\nJanet最终格式化输出')
+    for example in tokenized_train:
+        text = tokenizer.decode(example["input_ids"], skip_special_tokens=False)
+
+        if "Janet" in text:
+            print(text+'\n')

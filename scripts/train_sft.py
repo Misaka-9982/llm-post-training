@@ -34,14 +34,14 @@ def main():
     model.config.use_cache = False  # 禁用kvcache
 
     training_args = TrainingArguments(
-        output_dir="outputs/qwen3-0.6b-gsm8k-sft",
+        output_dir="outputs/qwen3-0.6b-gsm8k-sft-raw-lr1e-5-ep1",
 
-        num_train_epochs=2,
+        num_train_epochs=1,
 
         per_device_train_batch_size=4,
         gradient_accumulation_steps=4,
 
-        learning_rate=2e-5,
+        learning_rate=1e-5,
         weight_decay=0.01,
 
         bf16=True,
@@ -65,10 +65,10 @@ def main():
     trainer.train()
 
     trainer.save_model(
-        "outputs/qwen3-0.6b-gsm8k-sft/final"
+        "outputs/qwen3-0.6b-gsm8k-sft-raw-lr1e-5-ep1/final"
     )
     tokenizer.save_pretrained(
-        "outputs/qwen3-0.6b-gsm8k-sft/final"
+        "outputs/qwen3-0.6b-gsm8k-sft-raw-lr1e-5-ep1/final"
     )
 
 

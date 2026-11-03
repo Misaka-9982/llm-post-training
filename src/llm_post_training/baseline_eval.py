@@ -7,10 +7,10 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from llm_post_training.data import extract_final_answer, load_gsm8k
+from llm_post_training.data import build_prompt, extract_final_answer, load_gsm8k
 
 # MODEL_NAME = "Qwen/Qwen3-0.6B-Base"
-MODEL_NAME = "outputs/qwen3-0.6b-gsm8k-sft/final"
+MODEL_NAME = "outputs/qwen3-0.6b-gsm8k-sft-raw/final"
 
 def load_model():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
@@ -23,29 +23,16 @@ def load_model():
     return tokenizer, model
 
 
-def bulid_prompt(question: str) -> str:
-    # 圆括号自动跨行拼接成一个长str
-    return (
-        f"Question: {question}\n"
-        "Solve the problem step by step. "
-        "Give the final answer after ####.\n"
-        "Answer:"
-    )
-
-
 @torch.no_grad()
 def generate_answers(model, tokenizer, questions: list[str], max_new_tokens: int = 512) -> list[str]:
-    prompts = [bulid_prompt(question) for question in questions]
+    prompts = [build_prompt(question) for question in questions]
     inputs = tokenizer(prompts, return_tensors="pt", padding=True).to(model.device)
 
-    # **字典解包传参  do_sample=False贪心解码
-    # sft的时候使用<|im_end|>作为中止符号，不加入<|im_end|>会导致输出无法正常结束
-    eos_token_ids = [
-    tokenizer.eos_token_id,
-    tokenizer.convert_tokens_to_ids("<|im_end|>"),
-    ]
-    outputs = model.generate(**inputs, max_new_tokens=max_new_tokens, 
-                             do_sample=False, eos_token_id=eos_token_ids)
+    # Match the native EOS supervised by the raw-completion SFT data.
+    outputs = model.generate(
+        **inputs, max_new_tokens=max_new_tokens,
+        do_sample=False, eos_token_id=tokenizer.eos_token_id,
+    )
 
     # 只留生成的，去除输入prompt（包含左侧padding）
     generated_tokens = outputs[:, inputs["input_ids"].shape[1]:]
