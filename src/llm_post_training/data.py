@@ -5,8 +5,8 @@ def load_gsm8k():
     dataset = load_dataset("openai/gsm8k", "main")
     return dataset
 
-
-def extract_final_answer(answer: str) -> str:
+# 从数据集里提取标准gsm8k格式的最终答案
+def extract_dataset_final_answer(answer: str) -> str:
     return answer.split("####")[-1].strip()
 
 
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     print(sample["answer"])
 
     print("\nFinal answer:")
-    print(extract_final_answer(sample["answer"]))
+    print(extract_dataset_final_answer(sample["answer"]))
 
     print('\nPreprocessed preview: ')
     processed_dataset = dataset['train'].map(preprocess_sft_example)

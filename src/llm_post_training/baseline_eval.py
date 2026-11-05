@@ -7,7 +7,8 @@ import torch
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from llm_post_training.data import build_prompt, extract_final_answer, load_gsm8k
+from llm_post_training.data import build_prompt, extract_dataset_final_answer, load_gsm8k
+from llm_post_training.parsing import extract_model_answer, is_format_compliant
 
 # MODEL_NAME = "Qwen/Qwen3-0.6B-Base"
 MODEL_NAME = "outputs/qwen3-0.6b-gsm8k-sft-raw/final"
@@ -43,78 +44,6 @@ def generate_answers(model, tokenizer, questions: list[str], max_new_tokens: int
 
 def generate_answer(model, tokenizer, question: str, max_new_tokens: int = 512) -> str:
     return generate_answers(model, tokenizer, [question], max_new_tokens=max_new_tokens)[0]
-
-
-def normalize_number(s: str) -> str:
-    return s.replace(",", "").strip()
-
-
-def extract_model_answer(response: str) -> str | None:
-    # 1. GSM8K-style: #### 18
-    match = re.search(
-        r"####\s*\$?\s*(-?[\d,]+(?:\.\d+)?)",
-        response,
-        flags=re.IGNORECASE,
-    )
-    if match:
-        return normalize_number(match.group(1))
-
-    # 2. LaTeX boxed: \boxed{18}
-    matches = re.findall(
-        r"\\boxed\{\s*\$?\s*(-?[\d,]+(?:\.\d+)?)\s*\}",
-        response,
-        flags=re.IGNORECASE,
-    )
-    if matches:
-        return normalize_number(matches[-1])
-
-    # 3. Final Answer: 18 / Answer: **18 bolts**
-    matches = re.findall(
-        r"(?:final\s+answer|answer)\s*:\s*(?:\*\*)?\s*\$?\s*(-?[\d,]+(?:\.\d+)?)",
-        response,
-        flags=re.IGNORECASE,
-    )
-    if matches:
-        return normalize_number(matches[-1])
-
-    # 4. "the answer is 18"
-    matches = re.findall(
-        r"(?:the\s+)?answer\s+is\s*(?:\*\*)?\s*\$?\s*(-?[\d,]+(?:\.\d+)?)",
-        response,
-        flags=re.IGNORECASE,
-    )
-    if matches:
-        return normalize_number(matches[-1])
-
-    # 5. **about 35 hours**
-    bold_spans = re.findall(r"\*\*(.+?)\*\*", response)
-    for span in reversed(bold_spans):
-        match = re.search(
-            r"\$?\s*(-?[\d,]+(?:\.\d+)?)",
-            span,
-        )
-        if match:
-            return normalize_number(match.group(1))
-    
-    # fallback: 只看输出末尾
-    tail = response[-300:]
-    numbers = re.findall(
-        r"-?[\d,]+(?:\.\d+)?",
-        tail,
-    )
-    if numbers:
-        return normalize_number(numbers[-1])
-
-    return None
-
-
-def is_format_compliant(response: str) -> bool:
-    # Use the same pattern as the first answer-extraction rule.
-    return re.search(
-        r"####\s*\$?\s*(-?[\d,]+(?:\.\d+)?)",
-        response,
-        flags=re.IGNORECASE,
-    ) is not None
 
 
 def main():
@@ -155,7 +84,7 @@ def main():
             )
             for sample, response in zip(batch, responses, strict=True):
                 question = sample["question"]
-                gold_answer = extract_final_answer(sample["answer"])
+                gold_answer = extract_dataset_final_answer(sample["answer"])
                 pred_answer = extract_model_answer(response)
                 parse_success = pred_answer is not None
                 is_correct = parse_success and pred_answer == gold_answer
