@@ -34,7 +34,7 @@ def main():
     model.config.use_cache = False  # 禁用kvcache
 
     training_args = TrainingArguments(
-        output_dir="outputs/qwen3-0.6b-gsm8k-sft-raw-lr2e-6-ep1-save50",
+        output_dir="outputs/SFT/models/qwen3-0.6b-gsm8k-sft-raw-lr2e-6-ep1-save50",
 
         num_train_epochs=1,
 
@@ -65,10 +65,10 @@ def main():
     trainer.train()
 
     trainer.save_model(
-        "outputs/qwen3-0.6b-gsm8k-sft-raw-lr2e-6-ep1-save50/final"
+        "outputs/SFT/models/qwen3-0.6b-gsm8k-sft-raw-lr2e-6-ep1-save50/final"
     )
     tokenizer.save_pretrained(
-        "outputs/qwen3-0.6b-gsm8k-sft-raw-lr2e-6-ep1-save50/final"
+        "outputs/SFT/models/qwen3-0.6b-gsm8k-sft-raw-lr2e-6-ep1-save50/final"
     )
 
 

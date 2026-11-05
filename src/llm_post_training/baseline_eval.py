@@ -11,7 +11,7 @@ from llm_post_training.data import build_prompt, extract_dataset_final_answer, l
 from llm_post_training.parsing import extract_model_answer, is_format_compliant
 
 # MODEL_NAME = "Qwen/Qwen3-0.6B-Base"
-MODEL_NAME = "outputs/qwen3-0.6b-gsm8k-sft-raw/final"
+MODEL_NAME = "outputs/SFT/models/qwen3-0.6b-gsm8k-sft-raw/final"
 
 def load_model():
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
