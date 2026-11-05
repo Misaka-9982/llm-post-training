@@ -4,7 +4,7 @@ import torch
 from transformers import AutoModelForCausalLM, TrainingArguments, Trainer
 
 
-from llm_post_training.data import preprocess_example, tokenize_sft_example
+from llm_post_training.data import preprocess_sft_example, tokenize_sft_example
 
 
 MODEL_NAME = "Qwen/Qwen3-0.6B-Base"
@@ -15,7 +15,7 @@ def main():
     dataset = load_dataset("openai/gsm8k", "main")
 
     processed_train = dataset["train"].map(
-        preprocess_example,
+        preprocess_sft_example,
     )
 
     tokenized_train = processed_train.map(
@@ -34,20 +34,20 @@ def main():
     model.config.use_cache = False  # 禁用kvcache
 
     training_args = TrainingArguments(
-        output_dir="outputs/qwen3-0.6b-gsm8k-sft-raw-lr1e-5-ep1",
+        output_dir="outputs/qwen3-0.6b-gsm8k-sft-raw-lr2e-6-ep1-save50",
 
         num_train_epochs=1,
 
         per_device_train_batch_size=4,
         gradient_accumulation_steps=4,
 
-        learning_rate=1e-5,
+        learning_rate=2e-6,
         weight_decay=0.01,
 
         bf16=True,
 
         logging_steps=10,
-        save_steps=200,
+        save_steps=50,
         save_total_limit=2,
 
         report_to="none",
@@ -65,10 +65,10 @@ def main():
     trainer.train()
 
     trainer.save_model(
-        "outputs/qwen3-0.6b-gsm8k-sft-raw-lr1e-5-ep1/final"
+        "outputs/qwen3-0.6b-gsm8k-sft-raw-lr2e-6-ep1-save50/final"
     )
     tokenizer.save_pretrained(
-        "outputs/qwen3-0.6b-gsm8k-sft-raw-lr1e-5-ep1/final"
+        "outputs/qwen3-0.6b-gsm8k-sft-raw-lr2e-6-ep1-save50/final"
     )
 
 

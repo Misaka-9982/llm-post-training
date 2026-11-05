@@ -21,7 +21,7 @@ def parse_gsm8k_answer(answer: str) -> dict[str, str]:
     }
 
 
-def preprocess_example(example: dict) -> dict:
+def preprocess_sft_example(example: dict) -> dict:
     parsed = parse_gsm8k_answer(example["answer"])
 
     assistant_content = (
@@ -39,6 +39,20 @@ def preprocess_example(example: dict) -> dict:
                 "role": "assistant",
                 "content": assistant_content,
             },
+        ],
+        "final_answer": parsed["final_answer"],
+    }
+
+
+def preprocess_grpo_example(example: dict) -> dict:
+    parsed = parse_gsm8k_answer(example["answer"])
+
+    return {
+        "prompt": [
+            {
+                "role": "user",
+                "content": build_prompt(example["question"]),
+            }
         ],
         "final_answer": parsed["final_answer"],
     }
@@ -99,7 +113,7 @@ if __name__ == "__main__":
     print(extract_final_answer(sample["answer"]))
 
     print('\nPreprocessed preview: ')
-    processed_dataset = dataset['train'].map(preprocess_example)
+    processed_dataset = dataset['train'].map(preprocess_sft_example)
     for i in range(3):
         print(processed_dataset[i])
 
