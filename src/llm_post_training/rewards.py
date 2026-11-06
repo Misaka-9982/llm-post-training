@@ -2,6 +2,8 @@ from llm_post_training.parsing import extract_reward_answer, is_format_compliant
 
 
 def _get_completion_text(completion) -> str:
+    if isinstance(completion, str):
+        return completion
     return completion[0]["content"]
 
 

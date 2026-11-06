@@ -8,7 +8,8 @@ from llm_post_training.rewards import correctness_reward, format_reward
 
 
 def main():
-    model_path = "outputs/SFT/models/qwen3-0.6b-gsm8k-sft-raw/final"
+    model_path = "outputs/SFT/models/qwen3-0.6b-gsm8k-sft-raw-lr2e-6-ep1-save50/checkpoint-200"
+    # model_path = "outputs/SFT/models/qwen3-0.6b-gsm8k-sft-raw/final"
 
     tokenizer = AutoTokenizer.from_pretrained(model_path)
     model = AutoModelForCausalLM.from_pretrained(
@@ -22,15 +23,16 @@ def main():
     dataset = dataset.map(
         preprocess_grpo_example,
         remove_columns=dataset.column_names,
+        load_from_cache_file=False,
     )
 
     args = GRPOConfig(
         output_dir="outputs/GRPO/qwen3-0.6b-gsm8k-grpo-debug",
 
-        # debug
-        max_steps=10,
+        max_steps=100,
         logging_steps=1,
-        save_strategy="no",
+        save_steps=25,
+        save_strategy="steps",
         report_to="none",
         log_completions=True,
         num_completions_to_print=8,
@@ -57,6 +59,7 @@ def main():
 
     trainer = GRPOTrainer(
         model=model,
+        processing_class=tokenizer,
         args=args,
         train_dataset=dataset,
         reward_funcs=[

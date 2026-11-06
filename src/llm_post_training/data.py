@@ -48,12 +48,8 @@ def preprocess_grpo_example(example: dict) -> dict:
     parsed = parse_gsm8k_answer(example["answer"])
 
     return {
-        "prompt": [
-            {
-                "role": "user",
-                "content": build_prompt(example["question"]),
-            }
-        ],
+        # 保持GRPO prompt使用和SFT时完全一致的raw结构，防止trl自动套用chat模板
+        "prompt": build_prompt(example["question"]),
         "final_answer": parsed["final_answer"],
     }
 
