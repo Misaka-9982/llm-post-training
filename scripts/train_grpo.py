@@ -3,7 +3,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 
 from llm_post_training.data import preprocess_grpo_example
-from llm_post_training.rewards import correctness_reward, format_reward
+from llm_post_training.rewards import correctness_reward, gated_format_reward
 
 
 
@@ -31,7 +31,7 @@ def main():
 
         max_steps=100,
         logging_steps=1,
-        save_steps=25,
+        save_steps=20,
         save_strategy="steps",
         report_to="none",
         log_completions=True,
@@ -45,10 +45,11 @@ def main():
         # optimization
         per_device_train_batch_size=8,
         gradient_accumulation_steps=1,
-        learning_rate=1e-6,
+        learning_rate=5e-6,
+        lr_scheduler_type="constant",
 
         # reward
-        reward_weights=[1.0, 0.2],
+        reward_weights=[1.0, 0.0],
 
         # KL
         beta=0.0,
@@ -64,7 +65,7 @@ def main():
         train_dataset=dataset,
         reward_funcs=[
             correctness_reward,
-            format_reward,
+            gated_format_reward,
         ],
     )
 

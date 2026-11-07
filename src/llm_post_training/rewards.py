@@ -22,11 +22,22 @@ def correctness_reward(completions, final_answer, **kwargs) -> list[float]:
     return rewards
 
 
-def format_reward(completions, **kwargs) -> list[float]:
-    return [
-        1.0 if is_format_compliant(_get_completion_text(completion)) else 0.0
-        for completion in completions
-    ]
+# 条件触发，只有答案正确才给格式奖励
+def gated_format_reward(completions, final_answer, **kwargs) -> list[float]:
+    rewards = []
+
+    for completion, target in zip(completions, final_answer):
+        text = _get_completion_text(completion)
+        prediction = extract_reward_answer(text)
+        target = normalize_number(target)
+
+        is_correct = prediction == target
+        is_format_ok = is_format_compliant(text)
+
+        reward = 1.0 if is_correct and is_format_ok else 0.0
+        rewards.append(reward)
+
+    return rewards
 
 
 if __name__ == "__main__":
@@ -49,6 +60,7 @@ if __name__ == "__main__":
             "content": "#### 93",
         }]
     ]
+    test_completion = ["The answer is 90", "The answer is 93", "#### 90", "#### 93"]
     print(correctness_reward(test_completion, ["90", "90", "90", "90"]))
-    print(format_reward(test_completion))
+    print(gated_format_reward(test_completion, ["90", "90", "90", "90"]))
     
