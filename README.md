@@ -1,53 +1,77 @@
 # LLM Post-training
 
-以 **Qwen3-0.6B-Base + GSM8K** 学习并搭建后训练流程。
+基于 **Qwen3-0.6B-Base + GSM8K** 搭建并实践小模型后训练流程，覆盖 **baseline 评测、SFT、GRPO、reward 设计与统一评测**。
 
-## 项目路线
+项目主要目标是通过可复现的小规模实验理解 LLM post-training 中的数据、训练目标和奖励设计，并观察 SFT 与 RL 阶段对数学推理能力和输出格式的影响。
 
-1. GSM8K 加载与格式转换、Base 模型推理、答案解析和准确率评估。
-2. 全参数 SFT，记录配置、训练指标和 checkpoint，并与 Base 比较。
-3. 补齐 policy gradient、PPO clipping、KL 与 group-relative advantage 基础，再开展 GRPO 实验。
+## 当前进度
 
-当前仅完成项目与开发环境初始化，尚未实现数据、评估或训练流程。
+### 1. Baseline 与评测
 
-## WSL 开发环境
+- 完成 GSM8K 数据加载、prompt 构造与批量推理。
+- 实现答案解析、准确率与格式合规率评测。
+- 使用固定评测流程对 Base、SFT 与 GRPO checkpoint 进行对比，减少不同实验之间的评测偏差。
 
-Python 3.12，使用 uv 管理独立的 `.venv` 与依赖锁文件：
+### 2. Supervised Fine-Tuning
 
-```bash
-cd ~/llm-post-training
-uv sync --locked
-uv run python -c "import llm_post_training; print('import OK')"
-uv run ruff check .
-uv run ruff format --check .
-```
+- 基于 TRL 搭建全参数 SFT 训练流程。
+- 对比原始 GSM8K 训练数据与模型生成的合成数据。
+- 对生成结果进行正确性筛选（rejection sampling），构造更贴近模型分布的高质量 SFT 数据。
+- 在统一评测设置下，合成数据 SFT 相比直接使用原始训练集取得了明显更稳定的提升。
 
-uv 独立安装在用户目录 `~/.local/bin/uv`。当前终端可执行：
+### 3. GRPO
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-```
+- 基于 SFT checkpoint 搭建 GRPO 训练流程。
+- 实现 correctness / format reward，并尝试不同 reward 组合与权重。
+- 对 group size、batch size、learning rate、训练步数等因素进行了小规模对照实验。
+- 目前 GRPO pipeline 已稳定跑通，但在 GSM8K 上尚未观察到稳定超过最佳 SFT checkpoint 的收益，仍在继续分析 reward、采样分布与训练动态。
 
-Python 由 uv 独立管理，项目通过 `uv.toml` 仅选择 uv 管理的 Python，依赖安装在本目录 `.venv`，与 Conda 环境解耦。
-新机器首次设置时先运行 `uv python install 3.12`，再运行 `uv sync --locked`。
-初始环境只包含开发工具；PyTorch、Transformers、Datasets、TRL、Accelerate 和 W&B
-将在对应阶段按实际 GPU 环境添加和锁定。
+## 实验关注点
 
-## 本地与 Colab
+目前主要关注以下问题：
 
-本地 WSL 负责代码、Git 和轻量调试；Colab A100 负责推理与训练，3090 服务器恢复后可作为另一执行环境。
-现有 Colab CLI 保持独立安装，不作为本项目依赖。
+- 原始数据与模型生成数据对 SFT 的影响。
+- SFT checkpoint 对后续 GRPO 的影响。
+- correctness reward 与 format reward 之间的权衡。
+- group 内全对 / 全错样本导致 advantage 信息不足的问题。
+- reward 提升、格式合规率与最终 benchmark accuracy 之间并不总是一致。
+- batch size、学习率和训练步数对小模型 GRPO 稳定性的影响。
 
-多文件项目在远端执行前需要显式同步源码、配置和项目依赖文件。
-不能只发送训练入口文件就假定整个项目都已同步。具体同步脚本留到首次云端运行时实现并验证。
-模型与公开数据优先在执行环境下载，训练结果及时持久化；运行完成后停止 Colab runtime。
+README 暂只保留项目主线，详细实验数据与分析会在项目继续整理后补充。
 
-## 目录约定
+## 项目结构
 
 ```text
-src/llm_post_training/  Python 包，后续放数据、解析、评估和训练代码
-configs/               后续实验配置
-scripts/               后续运行与同步入口
+src/llm_post_training/
+├── baseline_eval.py   # GSM8K baseline / checkpoint 评测
+├── data.py            # 数据加载与训练数据处理
+├── parsing.py         # 数学答案解析与格式判断
+└── rewards.py         # GRPO reward functions
+
+scripts/
+├── setup_colab.py     # Colab 运行环境初始化
+├── train_sft.py       # SFT 训练入口
+└── train_grpo.py      # GRPO 训练入口
 ```
 
-数据、模型、checkpoint、日志、W&B 本地目录与凭据均不提交到 Git。
+## 技术栈
+
+- Python / PyTorch
+- Hugging Face Transformers / Datasets
+- TRL
+- uv
+- Google Colab（L4 / A100）
+
+## 环境
+
+项目使用 Python 3.12，并通过 uv 管理依赖：
+
+```bash
+uv sync --locked
+```
+
+本地主要负责开发与轻量调试，GPU 推理和训练主要在 Colab 环境完成。
+
+---
+
+> Work in progress. The repository is being cleaned up together with ongoing SFT / GRPO experiments.
