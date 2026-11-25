@@ -1,77 +1,72 @@
 # LLM Post-training
 
-基于 **Qwen3-0.6B-Base + GSM8K** 搭建并实践小模型后训练流程，覆盖 **baseline 评测、SFT、GRPO、reward 设计与统一评测**。
+基于 **Qwen3-0.6B-Base + GSM8K** 搭建小模型后训练实验框架，涵盖 **Synthetic Data Generation、Rejection Sampling、Supervised Fine-Tuning（SFT）、Group Relative Policy Optimization（GRPO）与 On-Policy Distillation（OPD）**，探索合成数据构建、强化学习奖励设计及 Teacher-Student 蒸馏策略对模型数学推理能力的影响。
 
-项目主要目标是通过可复现的小规模实验理解 LLM post-training 中的数据、训练目标和奖励设计，并观察 SFT 与 RL 阶段对数学推理能力和输出格式的影响。
+## 项目简介
 
-## 当前进度
+本项目以数学推理任务为切入点，基于 GSM8K 构建并筛选模型生成的合成推理数据，搭建从数据构建、模型训练到统一评测的完整后训练流程，并通过多组对照实验分析不同后训练方法的效果与局限性。
 
-### 1. Baseline 与评测
+- **Student Model**：Qwen3-0.6B-Base
+- **Teacher Model**：Qwen3-8B
+- **Benchmark**：GSM8K
+- **Framework**：PyTorch / Transformers / Datasets / TRL
 
-- 完成 GSM8K 数据加载、prompt 构造与批量推理。
-- 实现答案解析、准确率与格式合规率评测。
-- 使用固定评测流程对 Base、SFT 与 GRPO checkpoint 进行对比，减少不同实验之间的评测偏差。
+## 主要工作
+
+### 1. Baseline & Evaluation
+
+- 实现 GSM8K 数据加载、Prompt 构造、批量推理与数学答案解析。
+- 建立统一的准确率、答案解析成功率与格式合规率评测流程。
+- 基于 GSM8K 完整测试集（1,319 samples）对不同训练阶段的 checkpoint 进行评估。
 
 ### 2. Supervised Fine-Tuning
 
-- 基于 TRL 搭建全参数 SFT 训练流程。
-- 对比原始 GSM8K 训练数据与模型生成的合成数据。
-- 对生成结果进行正确性筛选（rejection sampling），构造更贴近模型分布的高质量 SFT 数据。
-- 在统一评测设置下，合成数据 SFT 相比直接使用原始训练集取得了明显更稳定的提升。
+- 搭建全参数 SFT 训练流程，对比不同数据来源、训练参数与 checkpoint 的表现。
+- 针对直接使用原始 GSM8K 数据进行 SFT 导致的性能退化，引入模型自生成推理数据，并通过 **Rejection Sampling** 筛选正确的推理样本。
+- 使用 Qwen3-8B 生成并筛选高质量推理数据，进一步开展 **Off-Policy SFT**，探索大模型向小模型的推理能力迁移。
 
-### 3. GRPO
+### 3. Reinforcement Learning with GRPO
 
-- 基于 SFT checkpoint 搭建 GRPO 训练流程。
-- 实现 correctness / format reward，并尝试不同 reward 组合与权重。
-- 对 group size、batch size、learning rate、训练步数等因素进行了小规模对照实验。
-- 目前 GRPO pipeline 已稳定跑通，但在 GSM8K 上尚未观察到稳定超过最佳 SFT checkpoint 的收益，仍在继续分析 reward、采样分布与训练动态。
+- 基于 TRL 搭建 GRPO 训练流程，设计可验证的 correctness reward 与 format reward。
+- 对比不同奖励组合、学习率、Batch Size、生成长度及训练步数对模型性能的影响。
+- 分析奖励提升与 benchmark accuracy 不一致、格式奖励偏置及组内有效 advantage 不足等问题。
+- 探索基于 Rollout 正确率的训练样本难度筛选策略。
+
+### 4. On-Policy Distillation（OPD，进行中）
+
+- 采用 Qwen3-8B 作为 Teacher，Qwen3-0.6B 作为 Student，完成 Teacher 与 Student 的 Tokenizer 对齐验证。
+- 通过不同长度的 Student Rollout Prefix 测试 Teacher 在学生生成轨迹上的续写能力，分析错误推理轨迹对蒸馏信号可靠性的影响。
+- 探索基于 Student On-Policy Rollout、Teacher Token-Level Logits 与 Reverse KL Divergence 的蒸馏训练方法。
+- 研究不同 Token 监督范围与错误轨迹处理策略对蒸馏效果的影响。
+
+## Preliminary Results
+
+以下为统一评测流程下的 GSM8K 全量测试集代表性结果：
+
+| Training Method | Answer Accuracy |
+|---|---:|
+| Qwen3-0.6B-Base | 62.02% |
+| SFT with Self-Generated Data | 67.40% |
+| Off-Policy SFT with Qwen3-8B | **69.75%** |
+
+通过合成推理数据筛选与 Teacher-Student 知识迁移，模型准确率较 Base 提升约 **7.73 percentage points**。
+
+GRPO 已完成多组对照实验，但尚未观察到稳定超过最佳 SFT checkpoint 的收益。OPD 相关实验仍在进行中。
 
 ## 实验关注点
 
-目前主要关注以下问题：
+- 训练数据质量及分布对 SFT 的影响。
+- Reward Design 与 GRPO 训练稳定性。
+- Rollout Difficulty 与 Group-Relative Advantage。
+- Off-Policy SFT 与 On-Policy Distillation 的差异。
+- Teacher 在 Student 生成轨迹上的监督信号可靠性。
+- 训练指标与实际推理能力之间的关系。
 
-- 原始数据与模型生成数据对 SFT 的影响。
-- SFT checkpoint 对后续 GRPO 的影响。
-- correctness reward 与 format reward 之间的权衡。
-- group 内全对 / 全错样本导致 advantage 信息不足的问题。
-- reward 提升、格式合规率与最终 benchmark accuracy 之间并不总是一致。
-- batch size、学习率和训练步数对小模型 GRPO 稳定性的影响。
+## Development Environment
 
-README 暂只保留项目主线，详细实验数据与分析会在项目继续整理后补充。
+- Python 3.12 / uv
+- PyTorch
+- Hugging Face Transformers / Datasets / TRL
+- WSL / Google Colab（A100 / L4）
 
-## 项目结构
-
-```text
-src/llm_post_training/
-├── baseline_eval.py   # GSM8K baseline / checkpoint 评测
-├── data.py            # 数据加载与训练数据处理
-├── parsing.py         # 数学答案解析与格式判断
-└── rewards.py         # GRPO reward functions
-
-scripts/
-├── setup_colab.py     # Colab 运行环境初始化
-├── train_sft.py       # SFT 训练入口
-└── train_grpo.py      # GRPO 训练入口
-```
-
-## 技术栈
-
-- Python / PyTorch
-- Hugging Face Transformers / Datasets
-- TRL
-- uv
-- Google Colab（L4 / A100）
-
-## 环境
-
-项目使用 Python 3.12，并通过 uv 管理依赖：
-
-```bash
-uv sync --locked
-```
-
-本地主要负责开发与轻量调试，GPU 推理和训练主要在 Colab 环境完成。
-
----
-
-> Work in progress. The repository is being cleaned up together with ongoing SFT / GRPO experiments.
+项目使用 uv 管理 Python 环境与依赖，本地负责开发和轻量调试，GPU 环境负责模型推理、训练与评测。
